@@ -50,14 +50,19 @@ class RANode:
 
 
 class Relation(RANode):
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, table_name, alias=None):
+        self.table_name = table_name
+        self.alias = alias
 
     def _dot_label(self):
-        return f"Table: {self.name}"
+        if self.alias:
+            return f"Table: {self.table_name} AS {self.alias}"
+        return f"Table: {self.table_name}"
 
     def __str__(self):
-        return f"Relation({self.name})"
+        if self.alias:
+            return f'Relation("{self.table_name} AS {self.alias}")'
+        return f'Relation("{self.table_name}")'
 
 
 class Selection(RANode):
@@ -70,7 +75,7 @@ class Selection(RANode):
         return f"σ\n{cond}"
 
     def __str__(self):
-        return f"Selection({self.condition}, {self.child})"
+        return f'Selection("{self.condition}", {self.child})'
 
 
 class Projection(RANode):
@@ -99,7 +104,7 @@ class Join(RANode):
         return f"Join({cond})"
 
     def __str__(self):
-        return f"Join({self.left}, {self.right}, {self.condition})"
+        return f'Join({self.left}, {self.right}, "{self.condition}")'
 
 
 class Subquery(RANode):
@@ -111,24 +116,23 @@ class Subquery(RANode):
         return f"Subquery: {self.alias or ''}"
 
     def __str__(self):
-        return f"Subquery({self.alias}, {self.child})"
-
+        return f'Subquery("{self.alias}", {self.child})'
 
 # Helper function to build a Relation or Subquery node from a table, alias, or subquery node
 def build_table(node):
-    # Direct table reference
+    # Direct table reference, preserve alias if present
     if isinstance(node, exp.Table):
-        return Relation(node.name)
+        table_name = node.this.name
+        alias_name = node.alias if node.alias else None
+        return Relation(table_name, alias_name)
 
     # Aliased table or subquery
     if isinstance(node, exp.Alias):
         child = node.this
-        alias_expr = node.args.get("alias")
-        alias_name = alias_expr.name if alias_expr else None
-
+        alias_name = node.alias
         # Underlying table alias
         if isinstance(child, exp.Table):
-            return Relation(alias_name)
+            return Relation(child.name, alias_name)
         # Subquery alias
         if isinstance(child, exp.Subquery):
             sub_sql = child.this.sql()
@@ -196,6 +200,7 @@ def visualize_ra_tree(ra_root, format='png', view=False):
 # """
 # ra_tree = build_ra_tree(query)
 # visualize_ra_tree(ra_tree).render('ra_tree_subquery')
+# print(ra_tree)
 
 # query = """
 # SELECT O.ORDERKEY, L.QUANTITY, S.SUPPKEY, C.CUSTKEY
@@ -208,22 +213,25 @@ def visualize_ra_tree(ra_root, format='png', view=False):
 # """
 # ra_tree = build_ra_tree(query)
 # visualize_ra_tree(ra_tree).render('ra_tree')
+# print(ra_tree)
 
-# query = """
-# SELECT PS.PARTKEY, PS.SUPPLYKEY
-# FROM PARTSUPP PS
-# JOIN SUPPLIER S ON PS.SUPPLYKEY = S.SUPPLYKEY
-# JOIN LINEITEM L ON PS.SUPPLYKEY = L.SUPPLYKEY
-# JOIN (SELECT P.NAME, P.BRAND FROM PART P) TMP1 ON TMP1.PARTKEY = PS.PARTKEY
-# JOIN (SELECT P.NAME, P.BRAND FROM PART P JOIN AMOGH A WHERE P.Q > 100) TMP2 ON TMP2.PARTKEY = L.PARTKEY
-# WHERE PS.AVAILQTY > 10 AND S.ACCTBAL > 1000
-# """
-# ra_tree = build_ra_tree(query)
-# visualize_ra_tree(ra_tree).render('ra_tree_part')
+query = """
+SELECT PS.PARTKEY, PS.SUPPLYKEY
+FROM PARTSUPP AS PS
+JOIN SUPPLIER AS S ON PS.SUPPLYKEY = S.SUPPLYKEY
+JOIN LINEITEM AS L ON PS.SUPPLYKEY = L.SUPPLYKEY
+JOIN (SELECT P.NAME, P.BRAND FROM PART P) AS TMP1 ON TMP1.PARTKEY = PS.PARTKEY
+JOIN (SELECT P.NAME, P.BRAND FROM PART P JOIN AMOGH A WHERE P.Q > 100) AS TMP2 ON TMP2.PARTKEY = L.PARTKEY
+WHERE PS.AVAILQTY > 10 AND S.ACCTBAL > 1000
+"""
+ra_tree = build_ra_tree(query)
+visualize_ra_tree(ra_tree).render('ra_tree_part')
+print(ra_tree)
 
-# query = "SELECT a, b FROM table1 JOIN table2 ON table1.id = table2.id WHERE a > 5"
+# query = "SELECT a, b FROM table1 JOIN table2 ON table1.id = table2.id WHERE b > 5"
 # ra_tree = build_ra_tree(query)
 # visualize_ra_tree(ra_tree).render('ra_tree1')
+# print(ra_tree)
 
 # query = """SELECT table_a.id, table_b.id
 # FROM table_a
@@ -232,6 +240,7 @@ def visualize_ra_tree(ra_root, format='png', view=False):
 # WHERE table_b.id > 1"""
 # ra_tree = build_ra_tree(query)
 # visualize_ra_tree(ra_tree).render('ra_tree2')
+# print(ra_tree)
 
 # query = """
 # SELECT S.S_NAME, N.N_NAME, L.L_EXTENDEDPRICE, O.O_ORDERDATE
@@ -243,3 +252,5 @@ def visualize_ra_tree(ra_root, format='png', view=False):
 # """
 # ra_tree = build_ra_tree(query)
 # visualize_ra_tree(ra_tree).render('ra_tree3')
+# print(ra_tree)
+
