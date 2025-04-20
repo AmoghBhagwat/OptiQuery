@@ -179,3 +179,9 @@ optiquery/
 
 # venvs
 oq/
+
+# plans and images
+*.png
+optimized_plan
+original_plan
+ra_tree_part
