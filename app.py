@@ -1,9 +1,10 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, url_for
 import sqlglot
 from sqlglot import expressions as exp
 import uuid
 
 from parse import build_ra_tree, visualize_ra_tree
+from pred_pushdown import pushdown_selections
 
 app = Flask(__name__)
 
@@ -33,6 +34,14 @@ TEMPLATE = """
       height: 100%;
       display: block; /* Ensures the SVG itself behaves as a block */
     }
+    .btn-active {
+      background-color: #0d6efd !important;
+      color: white !important;
+    }
+    .btn-inactive {
+      background-color: #6c757d !important;
+      color: white !important;
+    }
   </style>
 </head>
 <body>
@@ -47,11 +56,15 @@ TEMPLATE = """
         <div class="card">
           <div class="card-body">
             <h5 class="card-title">Enter SQL Query</h5>
-            <form method="post">
+            <form method="post" action="/">
               <div class="mb-3">
                 <textarea class="form-control" name="sql" rows="6" placeholder="SELECT * FROM table;">{{ sql }}</textarea>
               </div>
-              <button type="submit" class="btn btn-primary">Generate Tree</button>
+              <button type="submit" class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}">Generate Tree</button>
+            </form>
+            <form method="post" action="/pushdown" class="mt-2">
+              <input type="hidden" name="sql" value="{{ sql }}">
+              <button type="submit" class="btn {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}">Apply Predicate Pushdown</button>
             </form>
             {% if error %}
               <div class="alert alert-danger mt-3">{{ error }}</div>
@@ -112,6 +125,22 @@ def index():
             dot_src = dot.source
         except Exception as e:
             error = str(e)
+
+    return render_template_string(TEMPLATE, sql=sql, dot_src=dot_src, error=error)
+
+@app.route('/pushdown', methods=['POST'])
+def pushdown():
+    sql = request.form.get('sql', '')
+    dot_src = None
+    error = None
+
+    try:
+        ra_tree = build_ra_tree(sql)
+        optimized_tree = pushdown_selections(ra_tree)
+        dot = visualize_ra_tree(optimized_tree)
+        dot_src = dot.source
+    except Exception as e:
+        error = str(e)
 
     return render_template_string(TEMPLATE, sql=sql, dot_src=dot_src, error=error)
 

@@ -1,0 +1,46 @@
+digraph {
+	rankdir=BT
+	"3a57d4f0-0a03-46d3-b089-e16438f97583" [label="π
+• PS.PARTKEY
+• PS.SUPPLYKEY" fillcolor="#ABEBC6" fontname=Helvetica shape=box style="rounded,filled"]
+	"828b3d62-ab52-440f-b2da-df2dec5ae47c" [label="σ
+WHERE PS.AVAILQTY > 10 AND S.ACCTBAL > 1000" fillcolor="#F9E79F" fontname=Helvetica shape=box style="rounded,filled"]
+	"828b3d62-ab52-440f-b2da-df2dec5ae47c" -> "3a57d4f0-0a03-46d3-b089-e16438f97583"
+	"492beba6-209d-4019-ae8a-59f958f1d915" [label="Join(TMP2.PARTKEY = L.PARTKEY)" fillcolor="#F5B7B1" fontname=Helvetica shape=box style="rounded,filled"]
+	"492beba6-209d-4019-ae8a-59f958f1d915" -> "828b3d62-ab52-440f-b2da-df2dec5ae47c"
+	"5693f0d4-1a9e-48b9-80c6-86984c830fd9" [label="Join(TMP1.PARTKEY = PS.PARTKEY)" fillcolor="#F5B7B1" fontname=Helvetica shape=box style="rounded,filled"]
+	"5693f0d4-1a9e-48b9-80c6-86984c830fd9" -> "492beba6-209d-4019-ae8a-59f958f1d915"
+	"c8d1af42-95d2-4328-83bd-f70525b09d67" [label="Join(PS.SUPPLYKEY = L.SUPPLYKEY)" fillcolor="#F5B7B1" fontname=Helvetica shape=box style="rounded,filled"]
+	"c8d1af42-95d2-4328-83bd-f70525b09d67" -> "5693f0d4-1a9e-48b9-80c6-86984c830fd9"
+	"8f30fab6-ca23-4ba4-919e-5d85a3329434" [label="Join(PS.SUPPLYKEY = S.SUPPLYKEY)" fillcolor="#F5B7B1" fontname=Helvetica shape=box style="rounded,filled"]
+	"8f30fab6-ca23-4ba4-919e-5d85a3329434" -> "c8d1af42-95d2-4328-83bd-f70525b09d67"
+	"9fc215b1-d9aa-444e-bb72-6e6f8ff871bf" [label="Table: PARTSUPP AS PS" fillcolor="#AED6F1" fontname=Helvetica shape=box style="rounded,filled"]
+	"9fc215b1-d9aa-444e-bb72-6e6f8ff871bf" -> "8f30fab6-ca23-4ba4-919e-5d85a3329434"
+	"d180ec74-a497-49d4-8043-c729ff1b9d74" [label="Table: SUPPLIER AS S" fillcolor="#AED6F1" fontname=Helvetica shape=box style="rounded,filled"]
+	"d180ec74-a497-49d4-8043-c729ff1b9d74" -> "8f30fab6-ca23-4ba4-919e-5d85a3329434"
+	"18803677-a761-4eba-811f-cabf97b760bd" [label="Table: LINEITEM AS L" fillcolor="#AED6F1" fontname=Helvetica shape=box style="rounded,filled"]
+	"18803677-a761-4eba-811f-cabf97b760bd" -> "c8d1af42-95d2-4328-83bd-f70525b09d67"
+	"8f075a7c-9f1e-4e9d-b014-586a56fdf811" [label="Subquery: TMP1" fillcolor="#D7BDE2" fontname=Helvetica shape=box style="rounded,filled"]
+	"8f075a7c-9f1e-4e9d-b014-586a56fdf811" -> "5693f0d4-1a9e-48b9-80c6-86984c830fd9"
+	"9a6e1602-1ca5-4023-8f1e-f720216de6a4" [label="π
+• P.NAME
+• P.BRAND" fillcolor="#ABEBC6" fontname=Helvetica shape=box style="rounded,filled"]
+	"9a6e1602-1ca5-4023-8f1e-f720216de6a4" -> "8f075a7c-9f1e-4e9d-b014-586a56fdf811"
+	"556a2909-d03f-4d49-90ba-ef6758bdcdbd" [label="Table: PART AS P" fillcolor="#AED6F1" fontname=Helvetica shape=box style="rounded,filled"]
+	"556a2909-d03f-4d49-90ba-ef6758bdcdbd" -> "9a6e1602-1ca5-4023-8f1e-f720216de6a4"
+	"d8afc17a-0524-46f4-8305-d559cd63358e" [label="Subquery: TMP2" fillcolor="#D7BDE2" fontname=Helvetica shape=box style="rounded,filled"]
+	"d8afc17a-0524-46f4-8305-d559cd63358e" -> "492beba6-209d-4019-ae8a-59f958f1d915"
+	"6f81cf2a-25ec-4c5e-a824-423df188ba96" [label="π
+• P.NAME
+• P.BRAND" fillcolor="#ABEBC6" fontname=Helvetica shape=box style="rounded,filled"]
+	"6f81cf2a-25ec-4c5e-a824-423df188ba96" -> "d8afc17a-0524-46f4-8305-d559cd63358e"
+	"ec288846-f629-46dd-b4c4-7ba3d3af95fe" [label="σ
+WHERE P.Q > 100" fillcolor="#F9E79F" fontname=Helvetica shape=box style="rounded,filled"]
+	"ec288846-f629-46dd-b4c4-7ba3d3af95fe" -> "6f81cf2a-25ec-4c5e-a824-423df188ba96"
+	"10c257f0-a45c-4f78-ab60-9ce71136c749" [label="Join(TRUE)" fillcolor="#F5B7B1" fontname=Helvetica shape=box style="rounded,filled"]
+	"10c257f0-a45c-4f78-ab60-9ce71136c749" -> "ec288846-f629-46dd-b4c4-7ba3d3af95fe"
+	"ce78c447-f400-4545-9b90-70d9d41d2db4" [label="Table: PART AS P" fillcolor="#AED6F1" fontname=Helvetica shape=box style="rounded,filled"]
+	"ce78c447-f400-4545-9b90-70d9d41d2db4" -> "10c257f0-a45c-4f78-ab60-9ce71136c749"
+	"4d13e207-29f6-4177-a009-c14560fe095b" [label="Table: AMOGH AS A" fillcolor="#AED6F1" fontname=Helvetica shape=box style="rounded,filled"]
+	"4d13e207-29f6-4177-a009-c14560fe095b" -> "10c257f0-a45c-4f78-ab60-9ce71136c749"
+}
