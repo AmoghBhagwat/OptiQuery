@@ -185,3 +185,6 @@ oq/
 optimized_plan
 original_plan
 ra_tree_part
+
+# static dir for images
+static/

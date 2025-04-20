@@ -5,6 +5,8 @@ import uuid
 
 from parse import build_ra_tree, visualize_ra_tree
 from pred_pushdown import pushdown_selections
+from cost_estimator import estimate_cost, visualize_costs
+import psycopg2
 
 app = Flask(__name__)
 
@@ -66,6 +68,10 @@ TEMPLATE = """
               <input type="hidden" name="sql" value="{{ sql }}">
               <button type="submit" class="btn {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}">Apply Predicate Pushdown</button>
             </form>
+            <form method="post" action="/cost" class="mt-2">
+              <input type="hidden" name="sql" value="{{ sql }}">
+              <button type="submit" class="btn {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}">Compute Cost</button>
+            </form>
             {% if error %}
               <div class="alert alert-danger mt-3">{{ error }}</div>
             {% endif %}
@@ -98,6 +104,32 @@ TEMPLATE = """
       </div>
     </div>
     {% endif %}
+    {% if cost_image_path %}
+    <div class="row mt-4">
+      <div class="col text-center">
+        <h5>Cost Annotated RA Tree</h5>
+        <img src="{{ cost_image_path }}" alt="Cost Annotated RA Tree" class="img-fluid">
+      </div>
+    </div>
+    {% endif %}
+    {% if original_cost_svg and optimized_cost_svg %}
+    <div class="row mt-4">
+      <div class="d-flex justify-content-around align-items-start">
+        <div class="text-center mx-2">
+          <h5>Original RA Tree with Costs</h5>
+          <div class="svg-container">
+            {{ original_cost_svg | safe }}
+          </div>
+        </div>
+        <div class="text-center mx-2">
+          <h5>Optimized RA Tree with Costs</h5>
+          <div class="svg-container">
+            {{ optimized_cost_svg | safe }}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </div>
   <footer class="footer mt-4 py-3 bg-light">
     <div class="container text-center">
@@ -109,6 +141,52 @@ TEMPLATE = """
 </body>
 </html>
 """
+
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            dbname="tpch",  # Replace with your database name
+            user="dabba",  # Replace with your username
+            password="postgres",  # Replace with your password
+            host="localhost",  # Replace with your host if not localhost
+            port="5432"  # Replace with your port if not the default
+        )
+        return conn
+    except Exception as e:
+        print(f"Error connecting to the database: {e}")
+        raise
+
+def fetch_table_statistics():
+    """
+    Fetch row counts for all tables in the database using pg_stats_all_tables.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    table_stats = {}
+
+    try:
+        # Query pg_stats_all_tables for table statistics
+        cursor.execute("""
+            SELECT relname AS table_name, n_live_tup AS row_count
+            FROM pg_stat_all_tables
+            WHERE schemaname = 'public';
+        """)
+        stats = cursor.fetchall()
+
+        for stat in stats:
+            table_name, row_count = stat
+            table_stats[table_name] = row_count
+
+        print(f"Fetched table statistics: {table_stats}")
+
+    except Exception as e:
+        print(f"Error fetching table statistics: {e}")
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+    return table_stats
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -143,6 +221,46 @@ def pushdown():
         error = str(e)
 
     return render_template_string(TEMPLATE, sql=sql, dot_src=dot_src, error=error)
+
+@app.route('/cost', methods=['POST'])
+def compute_cost():
+    sql = request.form.get('sql', '')
+    error = None
+    original_cost_svg = None
+    optimized_cost_svg = None
+
+    try:
+        # Fetch table statistics
+        table_stats = fetch_table_statistics()
+
+        # Build the original RA tree
+        ra_tree = build_ra_tree(sql)
+
+        # Compute costs and annotate the original RA tree
+        estimate_cost(ra_tree, table_stats)
+
+        # Generate the SVG visualization for the original RA tree
+        original_cost_svg = visualize_costs(ra_tree)
+
+        # Optimize the RA tree
+        optimized_tree = pushdown_selections(ra_tree)
+
+        # Compute costs and annotate the optimized RA tree
+        estimate_cost(optimized_tree, table_stats)
+
+        # Generate the SVG visualization for the optimized RA tree
+        optimized_cost_svg = visualize_costs(optimized_tree)
+
+    except Exception as e:
+        error = str(e)
+
+    return render_template_string(
+        TEMPLATE,
+        sql=sql,
+        error=error,
+        original_cost_svg=original_cost_svg,
+        optimized_cost_svg=optimized_cost_svg
+    )
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

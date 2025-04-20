@@ -55,9 +55,12 @@ class Relation(RANode):
         self.alias = alias
 
     def _dot_label(self):
+        label = f"Table: {self.table_name}"
         if self.alias:
-            return f"Table: {self.table_name} AS {self.alias}"
-        return f"Table: {self.table_name}"
+            label += f" AS {self.alias}"
+        if hasattr(self, 'cost'):
+            label += f"\nCost: {self.cost}"
+        return label
 
     def __str__(self):
         if self.alias:
@@ -67,12 +70,15 @@ class Relation(RANode):
 
 class Selection(RANode):
     def __init__(self, condition, child):
-        self.condition = condition  # A string representing the condition
+        self.condition = condition
         self.child = child
 
     def _dot_label(self):
         cond = self.condition if len(self.condition) <= 50 else self.condition[:50] + '...'
-        return f"σ\n{cond}"
+        label = f"σ\n{cond}"
+        if hasattr(self, 'cost'):
+            label += f"\nCost: {self.cost}"
+        return label
 
     def __str__(self):
         return f'Selection("{self.condition}", {self.child})'
@@ -80,14 +86,17 @@ class Selection(RANode):
 
 class Projection(RANode):
     def __init__(self, columns, child):
-        self.columns = columns  # A list of projection columns as strings
+        self.columns = columns
         self.child = child
 
     def _dot_label(self):
         cols = '\n'.join([f'• {col}' for col in self.columns[:3]])
-        if len(self.columns) > 30:
+        if len(self.columns) > 3:
             cols += '\n...'
-        return f"π\n{cols}"
+        label = f"π\n{cols}"
+        if hasattr(self, 'cost'):
+            label += f"\nCost: {self.cost}"
+        return label
 
     def __str__(self):
         return f"Projection({self.columns}, {self.child})"
@@ -97,11 +106,14 @@ class Join(RANode):
     def __init__(self, left, right, condition):
         self.left = left
         self.right = right
-        self.condition = condition  # A string representing the join condition
+        self.condition = condition
 
     def _dot_label(self):
         cond = self.condition if len(self.condition) <= 50 else self.condition[:50] + '...'
-        return f"Join({cond})"
+        label = f"Join({cond})"
+        if hasattr(self, 'cost'):
+            label += f"\nCost: {self.cost}"
+        return label
 
     def __str__(self):
         return f'Join({self.left}, {self.right}, "{self.condition}")'
@@ -113,7 +125,10 @@ class Subquery(RANode):
         self.child = child
 
     def _dot_label(self):
-        return f"Subquery: {self.alias or ''}"
+        label = f"Subquery: {self.alias or ''}"
+        if hasattr(self, 'cost'):
+            label += f"\nCost: {self.cost}"
+        return label
 
     def __str__(self):
         return f'Subquery("{self.alias}", {self.child})'

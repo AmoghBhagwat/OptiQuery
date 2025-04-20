@@ -111,12 +111,12 @@ def visualize(ra_root: RANode, filename: str):
     dot.format = 'png'
     dot.render(filename, view=False)
 
-original_tree = Projection(['PS.PARTKEY', 'PS.SUPPLYKEY'], Selection("WHERE PS.AVAILQTY > 10 AND S.ACCTBAL > 1000", Join(Join(Join(Join(Relation("PARTSUPP AS PS"), Relation("SUPPLIER AS S"), "PS.SUPPLYKEY = S.SUPPLYKEY"), Relation("LINEITEM AS L"), "PS.SUPPLYKEY = L.SUPPLYKEY"), Subquery("TMP1", Projection(['P.NAME', 'P.BRAND'], Relation("PART AS P"))), "TMP1.PARTKEY = PS.PARTKEY"), Subquery("TMP2", Projection(['P.NAME', 'P.BRAND'], Selection("WHERE P.Q > 100", Join(Relation("PART AS P"), Relation("AMOGH AS A"), "TRUE")))), "TMP2.PARTKEY = L.PARTKEY")))
-optimized_tree = pushdown_selections(original_tree)
+# original_tree = Projection(['PS.PARTKEY', 'PS.SUPPLYKEY'], Selection("WHERE PS.AVAILQTY > 10 AND S.ACCTBAL > 1000", Join(Join(Join(Join(Relation("PARTSUPP AS PS"), Relation("SUPPLIER AS S"), "PS.SUPPLYKEY = S.SUPPLYKEY"), Relation("LINEITEM AS L"), "PS.SUPPLYKEY = L.SUPPLYKEY"), Subquery("TMP1", Projection(['P.NAME', 'P.BRAND'], Relation("PART AS P"))), "TMP1.PARTKEY = PS.PARTKEY"), Subquery("TMP2", Projection(['P.NAME', 'P.BRAND'], Selection("WHERE P.Q > 100", Join(Relation("PART AS P"), Relation("AMOGH AS A"), "TRUE")))), "TMP2.PARTKEY = L.PARTKEY")))
+# optimized_tree = pushdown_selections(original_tree)
 
-#print("\nOptimized Plan:")
-print(optimized_tree)
+# #print("\nOptimized Plan:")
+# print(optimized_tree)
 
-# Visualize
-visualize(original_tree, 'original_plan')
-visualize(optimized_tree, 'optimized_plan')
+# # Visualize
+# visualize(original_tree, 'original_plan')
+# visualize(optimized_tree, 'optimized_plan')
