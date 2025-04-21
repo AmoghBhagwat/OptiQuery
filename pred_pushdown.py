@@ -18,13 +18,10 @@ def get_aliases(node: RANode):
     """Collect the table‑alias identifiers in scope under this RA node."""
     # --- Relation case ---
     if isinstance(node, Relation):
-        name = getattr(node, 'name', None)
 
-        # 2) Fallback: parse the dot‑label "Table: foo AS bar" / "Table: foo bar"
-        if not name:
-            label = node._dot_label()        # e.g. "Table: foo AS bar"
-            # split off the leading "Table:"
-            name  = label.split("Table:")[1].strip()
+        label = node._dot_label()        # e.g. "Table: foo AS bar"
+        label = label.split('\n')[0]      # split off the cost
+        name  = label.split("Table:")[1].strip()
 
         # Now `name` might be "foo", "foo AS bar", or "foo bar"
         alias = set()
@@ -65,7 +62,7 @@ def pushdown_selections(node: RANode) -> RANode:
             parts = [part.strip() for part in re.split(r'\bAND\b', cond, flags=re.IGNORECASE)]
             result = node.child
             for part in parts:
-                result = pushdown_selections(Selection(part, result))
+                result = pushdown_selections(Selection("WHERE " + part, result))
             return result
 
         if isinstance(child, Join):
@@ -76,7 +73,7 @@ def pushdown_selections(node: RANode) -> RANode:
                 any(col.startswith(alias + '.') for alias in left_aliases)
                 for col in cond_cols
             ):
-                new_left = pushdown_selections(Selection(cond, child.left))
+                new_left = pushdown_selections(Selection("WHERE " + cond, child.left))
                 return Join(new_left, child.right, child.condition)
             
         
@@ -85,10 +82,10 @@ def pushdown_selections(node: RANode) -> RANode:
                 any(col.startswith(alias + '.') for alias in right_aliases)
                 for col in cond_cols
             ):
-                new_right = pushdown_selections(Selection(cond, child.right))
+                new_right = pushdown_selections(Selection("WHERE " + cond, child.right))
                 return Join(child.left, new_right, child.condition)
 
-        return Selection(cond, child)
+        return Selection("WHERE " + cond, child)
 
     elif isinstance(node, Projection):
         child = pushdown_selections(node.child)

@@ -6,14 +6,19 @@ import uuid
 from parse import build_ra_tree, visualize_ra_tree
 from pred_pushdown import pushdown_selections
 from cost_estimator import estimate_cost, visualize_costs
+from join_optimization import join_optimize
 import psycopg2
 
+import copy
 import sys
 
 app = Flask(__name__)
 
 ra_tree = None
-optimized_tree = None
+ra_tree_with_cost = None
+after_join = None
+after_join_push = None
+table_stats = None
 
 def get_db_connection():
     try:
@@ -95,14 +100,54 @@ def index():
         sql = request.form.get('sql', '')
         try:
             global ra_tree
+            global table_stats
+            global after_join
+            global after_join_push
+
+            table_stats = fetch_table_statistics()
+
             ra_tree = build_ra_tree(sql)
+            after_join = build_ra_tree(sql)
+            after_join_push = build_ra_tree(sql)
+
+            estimate_cost(ra_tree, table_stats)
+
+            estimate_cost(after_join, table_stats)
+            join_optimize(after_join)
+            estimate_cost(after_join, table_stats) 
+            
+            estimate_cost(after_join_push, table_stats)
+            join_optimize(after_join_push)
+            after_join_push = pushdown_selections(after_join_push)
+            estimate_cost(after_join_push, table_stats)
+
             dot = visualize_ra_tree(ra_tree)
-            # Provide raw DOT source for client-side rendering
             dot_src = dot.source
         except Exception as e:
             error = str(e)
 
     return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
+
+@app.route('/joinopt', methods=['POST'])
+def join_optimization():
+    """
+    Optimize the join order in the relational algebra tree.
+    """
+    sql = request.form.get('sql', '')
+    dot_src = None
+    error = None
+
+    try:
+        # Perform join optimization on the RA tree
+        global after_join
+       
+        dot = visualize_ra_tree(after_join)  # Visualize the optimized tree
+        dot_src = dot.source
+    except Exception as e:
+        error = str(e)
+
+    return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
+
 
 @app.route('/pushdown', methods=['POST'])
 def pushdown():
@@ -112,9 +157,9 @@ def pushdown():
 
     try:
         # ra_tree = build_ra_tree(sql)
-        global optimized_tree
-        optimized_tree = pushdown_selections(ra_tree)
-        dot = visualize_ra_tree(optimized_tree)
+        global after_join_push
+
+        dot = visualize_ra_tree(after_join_push)
         dot_src = dot.source
     except Exception as e:
         error = str(e)
@@ -125,47 +170,36 @@ def pushdown():
 def compute_cost():
     sql = request.form.get('sql', '')
     error = None
-    original_cost_svg = None
-    optimized_cost_svg = None
-    original_cumulative_cost = 0
-    optimized_cumulative_cost = 0
-
+    ra_tree_cost_svg = None
+    after_join_cost_svg = None
+    after_join_push_cost_svg = None
+    ra_tree_cost = 0
+    after_join_cost = 0
+    after_join_push_cost = 0
+    
     try:
-        # Fetch table statistics
-        # print("Fetching table statistics...")
-        table_stats = fetch_table_statistics()
+        ra_tree_cost_svg = visualize_ra_tree(ra_tree).source
+        after_join_cost_svg = visualize_ra_tree(after_join).source
+        after_join_push_cost_svg = visualize_ra_tree(after_join_push).source
 
-        # Compute costs for the original RA tree
-        global ra_tree
-        ra_tree_with_cost = ra_tree
-        estimate_cost(ra_tree_with_cost, table_stats)
-        original_cost_svg = visualize_costs(ra_tree_with_cost).source
-
-        # Calculate cumulative cost for the original tree
-        if hasattr(ra_tree_with_cost, 'cumulative_cost'):
-            original_cumulative_cost = ra_tree_with_cost.cumulative_cost
-
-        # Compute costs for the optimized RA tree
-        global optimized_tree
-        optimized_tree_with_cost = optimized_tree
-        estimate_cost(optimized_tree_with_cost, table_stats)
-        optimized_cost_svg = visualize_costs(optimized_tree_with_cost).source
-
-        # Calculate cumulative cost for the optimized tree
-        if hasattr(optimized_tree_with_cost, 'cumulative_cost'):
-            optimized_cumulative_cost = optimized_tree_with_cost.cumulative_cost
+        ra_tree_cost = ra_tree.cumulative_cost
+        after_join_cost = after_join.cumulative_cost
+        after_join_push_cost = after_join_push.cumulative_cost
 
     except Exception as e:
         error = str(e)
+        print(f"Error in cost computation: {e}", file=sys.stderr)
 
     return render_template(
         'index.html',
         sql=sql,
         error=error,
-        original_cost_svg=original_cost_svg,
-        optimized_cost_svg=optimized_cost_svg,
-        original_cumulative_cost=original_cumulative_cost,
-        optimized_cumulative_cost=optimized_cumulative_cost
+        ra_tree_cost_svg=ra_tree_cost_svg,
+        after_join_cost_svg=after_join_cost_svg,
+        after_join_push_cost_svg=after_join_push_cost_svg,
+        ra_tree_cost=ra_tree_cost,
+        after_join_cost=after_join_cost,
+        after_join_push_cost=after_join_push_cost
     )
 
 @app.route('/schema', methods=['GET'])

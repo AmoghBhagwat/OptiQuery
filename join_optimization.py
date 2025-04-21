@@ -20,10 +20,11 @@ def extract_tables(condition: str):
 temp_root = 0
 
 def _find_joins(node: RANode, edges: list[tuple[str,str,str]], alias_to_RANode: dict[str,RANode], join_obtained: int, parent: RANode):
-    
     if join_obtained == 0:
         if isinstance(node,Join):
             if node.condition.upper() != "TRUE":
+                global temp_root
+
                 temp_root = parent
                 join_obtained = 1
             else:

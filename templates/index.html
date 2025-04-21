@@ -34,8 +34,9 @@
             /* Ensures the SVG itself behaves as a block */
         }
 
-        #original-graph-container,
-        #optimized-graph-container {
+        #ra-tree-container,
+        #after-join-container,
+        #after-join-push-container {
             width: 100%;
             height: 700px;
             overflow: hidden;
@@ -56,37 +57,50 @@
     <script>
         // Retrieve button states from localStorage
         let isTreeGenerated = localStorage.getItem('isTreeGenerated') === 'true';
+        let isJoinOptimized = localStorage.getItem('isJoinOptimized') === 'true';
         let isPushdownApplied = localStorage.getItem('isPushdownApplied') === 'true';
 
         // Update button states on page load
         window.onload = function () {
             if (isTreeGenerated) {
+                document.getElementById('optimize-button').disabled = false;
+            }
+            if (isTreeGenerated && isJoinOptimized) {
                 document.getElementById('pushdown-button').disabled = false;
             }
-            if (isTreeGenerated && isPushdownApplied) {
+            if (isTreeGenerated && isJoinOptimized && isPushdownApplied) {
                 document.getElementById('cost-button').disabled = false;
             }
         };
 
-        function enablePushdownButton() {
+        function enableJoinOptimizeButton() {
             isTreeGenerated = true;
             localStorage.setItem('isTreeGenerated', 'true');
+            document.getElementById('optimize-button').disabled = false;
+        }
+
+        function enablePushdownButton() {
+            isJoinOptimized = true;
+            localStorage.setItem('isJoinOptimized', 'true');
             document.getElementById('pushdown-button').disabled = false;
         }
 
         function enableCostButton() {
             isPushdownApplied = true;
             localStorage.setItem('isPushdownApplied', 'true');
-            if (isTreeGenerated) {
+            if (isTreeGenerated && isJoinOptimized) {
                 document.getElementById('cost-button').disabled = false;
             }
         }
 
         function resetButtonStates() {
             isTreeGenerated = false;
+            isJoinOptimized = false;
             isPushdownApplied = false;
             localStorage.setItem('isTreeGenerated', 'false');
+            localStorage.setItem('isJoinOptimized', 'false');
             localStorage.setItem('isPushdownApplied', 'false');
+            document.getElementById('optimize-button').disabled = true;
             document.getElementById('pushdown-button').disabled = true;
             document.getElementById('cost-button').disabled = true;
         }
@@ -132,7 +146,7 @@
                             </div>
                             <button type="submit"
                                 class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}"
-                                onclick="enablePushdownButton()">Generate Tree</button>
+                                onclick="enableJoinOptimizeButton()">Generate Tree</button>
                         </form>
                     </div>
                 </div>
@@ -144,19 +158,25 @@
                     <div class="card-body">
                         <!-- <h5 class="card-title">Operations</h5> -->
                         <div class="d-flex justify-content-around align-items-center flex-column">
+                            <form method="post" action="/joinopt" class="mb-3">
+                                <input type="hidden" name="sql" value="{{ sql }}">
+                                <button type="submit" id="optimize-button"
+                                    class="btn {% if request.endpoint == 'optimize' %}btn-active{% else %}btn-inactive{% endif %}"
+                                    disabled onclick="enablePushdownButton()">Optimize RA Tree</button>
+                            </form>
+                            
                             <form method="post" action="/pushdown" class="mb-3">
                                 <input type="hidden" name="sql" value="{{ sql }}">
                                 <button type="submit" id="pushdown-button"
                                     class="btn {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}"
                                     disabled onclick="enableCostButton()">Apply Predicate Pushdown</button>
                             </form>
-
                             <!-- Compute Cost Button -->
                             <form method="post" action="/cost" class="mb-3">
                                 <input type="hidden" name="sql" value="{{ sql }}">
                                 <button type="submit" id="cost-button"
                                     class="btn {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}"
-                                    disabled>Compute Cost</button>
+                                    disabled>Compare Costs</button>
                             </form>
 
                             <!-- Show Database Schema Button -->
@@ -191,18 +211,19 @@
             </div>
         </div>
         {% endif %}
-        {% if original_cost_svg and optimized_cost_svg %}
+        {% if ra_tree_cost_svg and after_join_cost_svg and after_join_push_cost_svg %}
         <div class="row mt-4">
             <div class="col">
                 <div class="alert alert-info text-center">
                     <h5>Cost Comparison</h5>
                     <p>
-                        <strong>Original Cumulative Cost:</strong> {{ "{:.2e}".format(original_cumulative_cost) }} <br>
-                        <strong>Optimized Cumulative Cost:</strong> {{ "{:.2e}".format(optimized_cumulative_cost) }}
+                        <strong>Original Cumulative Cost:</strong> {{ "{:.2e}".format(ra_tree_cost) }} <br>
+                        <strong>Cost after Join Optimization:</strong> {{ "{:.2e}".format(after_join_cost) }} <br>
+                        <strong>Cost after (JO) and Predicate Pushdown:</strong> {{ "{:.2e}".format(after_join_push_cost) }}
                     </p>
-                    {% if original_cumulative_cost > optimized_cumulative_cost %}
+                    {% if ra_tree_cost > after_join_push_cost %}
                     <p class="text-success">The optimized tree has a lower cumulative cost!</p>
-                    {% elif original_cumulative_cost < optimized_cumulative_cost %} <p class="text-danger">The optimized
+                    {% elif ra_tree_cost < after_join_push_cost %} <p class="text-danger">The optimized
                         tree
                         has a higher cumulative cost!</p>
                         {% else %}
@@ -214,15 +235,22 @@
         <div class="row mt-4">
             <div class="col-md-6">
                 <div class="card">
-                    <div class="card-body" id="original-graph-container">
+                    <div class="card-body" id="ra-tree-container">
                         <h5 class="text-center">Original RA Tree with Costs</h5>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="card">
-                    <div class="card-body" id="optimized-graph-container">
-                        <h5 class="text-center">Optimized RA Tree (after Predicate Pushdowns) with Costs</h5>
+                    <div class="card-body" id="after-join-container">
+                        <h5 class="text-center">RA Tree (after Join Optimization) with Costs</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body" id="after-join-push-container">
+                        <h5 class="text-center">Optimized RA Tree after JO and Predicate Pushdown with Costs</h5>
                     </div>
                 </div>
             </div>
@@ -265,10 +293,12 @@
             }
 
             // Render the original and optimized graphs
-            const originalDot = {{ original_cost_svg | tojson }};
-            const optimizedDot = {{ optimized_cost_svg | tojson }};
-            renderGraph('#original-graph-container', originalDot, 1.2); // Default zoom 1.2x
-            renderGraph('#optimized-graph-container', optimizedDot, 1.2); // Default zoom 1.2x
+            const ra_tree_dot = {{ ra_tree_cost_svg | tojson }};
+            const after_join_dot = {{ after_join_cost_svg | tojson }};
+            const after_join_push_dot = {{ after_join_push_cost_svg | tojson }};
+            renderGraph('#ra-tree-container', ra_tree_dot, 0.4); // Default zoom 0.4x
+            renderGraph('#after-join-container', after_join_dot, 0.4); // Default zoom 0.4x
+            renderGraph('#after-join-push-container', after_join_push_dot, 0.4); // Default zoom 0.4x
         </script>
         {% endif %}
     </div>

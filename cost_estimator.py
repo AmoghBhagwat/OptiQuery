@@ -22,14 +22,14 @@ def estimate_cost(node: RANode, table_stats: dict):
         filtered_count = child_cost * 0.1
         node.cost = max(10, filtered_count)
         node.cumulative_cost = node.cost + node.child.cumulative_cost
-        return filtered_count
+        return node.cost
 
     elif isinstance(node, Projection):
         # Projection does not change the row count
         child_cost = estimate_cost(node.child, table_stats)
         node.cost = child_cost
         node.cumulative_cost = node.cost + node.child.cumulative_cost
-        return child_cost
+        return node.cost
 
     elif isinstance(node, Join):
         # Estimate the size of the join dynamically
@@ -38,14 +38,14 @@ def estimate_cost(node: RANode, table_stats: dict):
         join_count = left_cost * right_cost * 0.01
         node.cost = max(50, join_count)
         node.cumulative_cost = node.cost + node.left.cumulative_cost + node.right.cumulative_cost
-        return join_count
+        return node.cost
 
     elif isinstance(node, Subquery):
         # Estimate the cost of the subquery
         child_cost = estimate_cost(node.child, table_stats)
         node.cost = child_cost
         node.cumulative_cost = node.cost + node.child.cumulative_cost
-        return child_cost
+        return node.cost
 
     else:
         node.cost = 10
