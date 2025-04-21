@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, url_for
+from flask import Flask, request, render_template, url_for
 import sqlglot
 from sqlglot import expressions as exp
 import uuid
@@ -10,137 +10,8 @@ import psycopg2
 
 app = Flask(__name__)
 
-# HTML template with Viz.js for interactive SVG rendering
-TEMPLATE = """
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>OptiQuery</title>
-  <!-- Bootstrap CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://d3js.org/d3.v6.min.js"></script>
-  <script src="https://unpkg.com/d3-graphviz/build/d3-graphviz.min.js"></script>
-  <style>
-    body { background-color: #f8f9fa; }
-    .card { box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
-    #graph-container {
-      width: 100%;
-      height: 500px;
-      overflow: auto;
-      margin: 0 auto; /* Added for horizontal centering */
-    }
-    #graph svg {
-      width: 100%;
-      height: 100%;
-      display: block; /* Ensures the SVG itself behaves as a block */
-    }
-    .btn-active {
-      background-color: #0d6efd !important;
-      color: white !important;
-    }
-    .btn-inactive {
-      background-color: #6c757d !important;
-      color: white !important;
-    }
-  </style>
-</head>
-<body>
-  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">OptiQuery</a>
-    </div>
-  </nav>
-  <div class="container">
-    <div class="row mb-4">
-      <div class="col">
-        <div class="card">
-          <div class="card-body">
-            <h5 class="card-title">Enter SQL Query</h5>
-            <form method="post" action="/">
-              <div class="mb-3">
-                <textarea class="form-control" name="sql" rows="6" placeholder="SELECT * FROM table;">{{ sql }}</textarea>
-              </div>
-              <button type="submit" class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}">Generate Tree</button>
-            </form>
-            <form method="post" action="/pushdown" class="mt-2">
-              <input type="hidden" name="sql" value="{{ sql }}">
-              <button type="submit" class="btn {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}">Apply Predicate Pushdown</button>
-            </form>
-            <form method="post" action="/cost" class="mt-2">
-              <input type="hidden" name="sql" value="{{ sql }}">
-              <button type="submit" class="btn {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}">Compute Cost</button>
-            </form>
-            {% if error %}
-              <div class="alert alert-danger mt-3">{{ error }}</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-    {% if dot_src %}
-    <div class="row">
-      <div class="col">
-        <div class="card">
-          <div class="card-body" id="graph-container">
-            <script>
-              const dot = {{ dot_src | tojson }};
-                d3.select('#graph-container')
-                  .append('div')
-                  .attr('id', 'graph')
-                  .style('margin', '0 auto') // Dynamic centering
-                  .graphviz({ useWorker: false })
-                  .zoom(true)
-                  .fit(true)
-                  .renderDot(dot)
-                  .on('end', function() {
-                    // Additional post-rendering centering adjustments if needed
-                  });
-
-            </script>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-    {% if cost_image_path %}
-    <div class="row mt-4">
-      <div class="col text-center">
-        <h5>Cost Annotated RA Tree</h5>
-        <img src="{{ cost_image_path }}" alt="Cost Annotated RA Tree" class="img-fluid">
-      </div>
-    </div>
-    {% endif %}
-    {% if original_cost_svg and optimized_cost_svg %}
-    <div class="row mt-4">
-      <div class="d-flex justify-content-around align-items-start">
-        <div class="text-center mx-2">
-          <h5>Original RA Tree with Costs</h5>
-          <div class="svg-container">
-            {{ original_cost_svg | safe }}
-          </div>
-        </div>
-        <div class="text-center mx-2">
-          <h5>Optimized RA Tree with Costs</h5>
-          <div class="svg-container">
-            {{ optimized_cost_svg | safe }}
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-  <footer class="footer mt-4 py-3 bg-light">
-    <div class="container text-center">
-      <span class="text-muted">&copy; 2025 OptiQuery</span>
-    </div>
-  </footer>
-  <!-- Bootstrap Bundle with Popper -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
-"""
+ra_tree = None
+optimized_tree = None
 
 def get_db_connection():
     try:
@@ -197,6 +68,7 @@ def index():
     if request.method == 'POST':
         sql = request.form.get('sql', '')
         try:
+            global ra_tree
             ra_tree = build_ra_tree(sql)
             dot = visualize_ra_tree(ra_tree)
             # Provide raw DOT source for client-side rendering
@@ -204,7 +76,7 @@ def index():
         except Exception as e:
             error = str(e)
 
-    return render_template_string(TEMPLATE, sql=sql, dot_src=dot_src, error=error)
+    return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
 
 @app.route('/pushdown', methods=['POST'])
 def pushdown():
@@ -213,14 +85,15 @@ def pushdown():
     error = None
 
     try:
-        ra_tree = build_ra_tree(sql)
+        # ra_tree = build_ra_tree(sql)
+        global optimized_tree
         optimized_tree = pushdown_selections(ra_tree)
         dot = visualize_ra_tree(optimized_tree)
         dot_src = dot.source
     except Exception as e:
         error = str(e)
 
-    return render_template_string(TEMPLATE, sql=sql, dot_src=dot_src, error=error)
+    return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
 
 @app.route('/cost', methods=['POST'])
 def compute_cost():
@@ -231,31 +104,41 @@ def compute_cost():
 
     try:
         # Fetch table statistics
+        print("Fetching table statistics...")
+
         table_stats = fetch_table_statistics()
 
-        # Build the original RA tree
-        ra_tree = build_ra_tree(sql)
+        # # Build the original RA tree
+        # ra_tree = build_ra_tree(sql)
 
-        # Compute costs and annotate the original RA tree
-        estimate_cost(ra_tree, table_stats)
+        # # print(ra_tree)
+        # # Compute costs and annotate the original RA tree
+        global ra_tree
+        ra_tree_with_cost = ra_tree
+        estimate_cost(ra_tree_with_cost, table_stats)
+        # # print(ra_tree)
 
-        # Generate the SVG visualization for the original RA tree
-        original_cost_svg = visualize_costs(ra_tree)
+        # # Generate the SVG visualization for the original RA tree
+        original_cost_svg = visualize_costs(ra_tree_with_cost).source
 
-        # Optimize the RA tree
-        optimized_tree = pushdown_selections(ra_tree)
+        # # Optimize the RA tree
+        # optimized_tree = pushdown_selections(ra_tree)
 
         # Compute costs and annotate the optimized RA tree
-        estimate_cost(optimized_tree, table_stats)
+        global optimized_tree
+        optimized_tree_with_cost = optimized_tree
+        estimate_cost(optimized_tree_with_cost, table_stats)
 
         # Generate the SVG visualization for the optimized RA tree
-        optimized_cost_svg = visualize_costs(optimized_tree)
+        optimized_cost_svg = visualize_costs(optimized_tree_with_cost).source
+
+        # optimized_cost_svg = visualize_ra_tree(optimized_tree).pipe(format='svg').decode('utf-8')
 
     except Exception as e:
         error = str(e)
 
-    return render_template_string(
-        TEMPLATE,
+    return render_template(
+        'index.html',
         sql=sql,
         error=error,
         original_cost_svg=original_cost_svg,

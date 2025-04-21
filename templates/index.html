@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OptiQuery</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <script src="https://unpkg.com/d3-graphviz/build/d3-graphviz.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+
+        #graph-container {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            margin: 0 auto;
+            /* Added for horizontal centering */
+        }
+
+        #graph svg {
+            width: 100%;
+            height: 500px;
+            display: block;
+            /* Ensures the SVG itself behaves as a block */
+        }
+
+        #original-graph-container,
+        #optimized-graph-container {
+            width: 100%;
+            height: 700px;
+            overflow: hidden;
+            margin: 0 auto;
+            /* Added for horizontal centering */
+        }
+
+        .btn-active {
+            background-color: #0d6efd !important;
+            color: white !important;
+        }
+
+        .btn-inactive {
+            background-color: #6c757d !important;
+            color: white !important;
+        }
+    </style>
+    <script>
+        // Retrieve button states from localStorage
+        let isTreeGenerated = localStorage.getItem('isTreeGenerated') === 'true';
+        let isPushdownApplied = localStorage.getItem('isPushdownApplied') === 'true';
+
+        // Update button states on page load
+        window.onload = function () {
+            if (isTreeGenerated) {
+                document.getElementById('pushdown-button').disabled = false;
+            }
+            if (isTreeGenerated && isPushdownApplied) {
+                document.getElementById('cost-button').disabled = false;
+            }
+        };
+
+        function enablePushdownButton() {
+            isTreeGenerated = true;
+            localStorage.setItem('isTreeGenerated', 'true');
+            document.getElementById('pushdown-button').disabled = false;
+        }
+
+        function enableCostButton() {
+            isPushdownApplied = true;
+            localStorage.setItem('isPushdownApplied', 'true');
+            if (isTreeGenerated) {
+                document.getElementById('cost-button').disabled = false;
+            }
+        }
+
+        function resetButtonStates() {
+            isTreeGenerated = false;
+            isPushdownApplied = false;
+            localStorage.setItem('isTreeGenerated', 'false');
+            localStorage.setItem('isPushdownApplied', 'false');
+            document.getElementById('pushdown-button').disabled = true;
+            document.getElementById('cost-button').disabled = true;
+        }
+    </script>
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">OptiQuery</a>
+        </div>
+    </nav>
+    <div class="container">
+        <div class="row mb-4">
+            <!-- Left Column: Textarea and Generate Tree Button -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Enter SQL Query</h5>
+                        <form method="post" action="/">
+                            <div class="mb-3">
+                                <textarea class="form-control" name="sql" rows="6" placeholder="SELECT * FROM table;"
+                                    oninput="resetButtonStates()">{{ sql }}</textarea>
+                            </div>
+                            <button type="submit"
+                                class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}"
+                                onclick="enablePushdownButton()">Generate Tree</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Apply Pushdown and Compute Cost Buttons -->
+            <div class="col-md-4 d-flex flex-column justify-content-start">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Operations</h5>
+                        <form method="post" action="/pushdown" class="mb-3">
+                            <input type="hidden" name="sql" value="{{ sql }}">
+                            <button type="submit" id="pushdown-button"
+                                class="btn {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}"
+                                disabled onclick="enableCostButton()">Apply Predicate Pushdown</button>
+                        </form>
+                        <form method="post" action="/cost">
+                            <input type="hidden" name="sql" value="{{ sql }}">
+                            <button type="submit" id="cost-button"
+                                class="btn {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}"
+                                disabled>Compute Cost</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% if dot_src %}
+        <div class="row">
+            <div class="col">
+                <div class="card">
+                    <div class="card-body" id="graph-container">
+                        <script>
+                            const dot = {{ dot_src | tojson }};
+                            const graphContainer = d3.select('#graph-container')
+                                .append('div')
+                                .attr('id', 'graph')
+                                .style('margin', '0 auto') // Dynamic centering
+                                .graphviz({ useWorker: false })
+                                .zoom(true) // Enable zoom
+                                .fit(true) // Fit the graph to the container
+                                .renderDot(dot)
+                                .on('end', function () {
+
+                                });
+                        </script>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if original_cost_svg and optimized_cost_svg %}
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body" id="original-graph-container">
+                        <h5 class="text-center">Original RA Tree with Costs</h5>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body" id="optimized-graph-container">
+                        <h5 class="text-center">Optimized RA Tree (after Predicate Pushdowns) with Costs</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function renderGraph(containerId, dotData, defaultZoomLevel) {
+                const graphContainer = d3.select(containerId)
+                    .append('div')
+                    .attr('id', `${containerId}-graph`)
+                    .style('margin', '0 auto') // Dynamic centering
+                    .graphviz({ useWorker: false })
+                    .zoom(true) // Enable zoom
+                    .fit(true) // Fit the graph to the container
+                    .renderDot(dotData)
+                    .on('end', function () {
+                        const svg = d3.select(`${containerId} svg`);
+                        const g = svg.select('g'); // Select the inner group element
+
+                        // Define the zoom behavior
+                        const zoom = d3.zoom()
+                            .scaleExtent([0.1, 2]) // Set zoom limits (min: 0.1x, max: 2x)
+                            .on('zoom', function (event) {
+                                g.attr('transform', event.transform); // Apply the zoom transform to the group
+                            });
+
+                        // Apply the zoom behavior to the SVG
+                        svg.call(zoom);
+
+                        // Set the default zoom level
+                        const containerWidth = svg.node().getBoundingClientRect().width;
+                        const containerHeight = svg.node().getBoundingClientRect().height;
+                        const transform = d3.zoomIdentity
+                            .translate(containerWidth * 0, containerHeight / 2.5) // Center the graph
+                            .scale(0.5); // Apply the zoom level
+
+                        // Apply the default transform
+                        svg.call(zoom.transform, transform);
+                    });
+            }
+
+            // Render the original and optimized graphs
+            const originalDot = {{ original_cost_svg | tojson }};
+            const optimizedDot = {{ optimized_cost_svg | tojson }};
+            renderGraph('#original-graph-container', originalDot, 1.2); // Default zoom 1.2x
+            renderGraph('#optimized-graph-container', optimizedDot, 1.2); // Default zoom 1.2x
+        </script>
+    </div>
+    {% endif %}
+    </div>
+    <footer class="footer mt-4 py-3 bg-light">
+        <div class="container text-center">
+            <span class="text-muted">&copy; 2025 OptiQuery</span>
+        </div>
+    </footer>
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
