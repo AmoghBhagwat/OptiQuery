@@ -8,6 +8,8 @@ from pred_pushdown import pushdown_selections
 from cost_estimator import estimate_cost, visualize_costs
 import psycopg2
 
+import sys
+
 app = Flask(__name__)
 
 ra_tree = None
@@ -165,6 +167,95 @@ def compute_cost():
         original_cumulative_cost=original_cumulative_cost,
         optimized_cumulative_cost=optimized_cumulative_cost
     )
+
+@app.route('/schema', methods=['GET'])
+def get_schema_graph():
+    """
+    Fetch the schema of the current database and return it in DOT format for visualization.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    dot_lines = [
+        "digraph Schema {",
+        "rankdir=LR;",  # Left-to-right graph layout
+        "node [shape=box, style=filled, color=lightblue, fontname=Consolas];",  # Default node styling with monospace font
+        "edge [fontname=Consolas, color=gray];"  # Default edge styling with monospace font
+    ]
+
+    # Mapping PostgreSQL data types to user-friendly formats
+    data_type_mapping = {
+        "integer": "INT",
+        "character varying": "VARCHAR",
+        "character": "CHAR",
+        "text": "TEXT",
+        "boolean": "BOOL",
+        "timestamp without time zone": "TIMESTAMP",
+        "timestamp with time zone": "TIMESTAMPTZ",
+        "numeric": "NUMERIC",
+        "real": "REAL",
+        "double precision": "DOUBLE"
+    }
+
+    try:
+        # Fetch table names and their columns
+        cursor.execute("""
+            SELECT table_name, column_name, data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+            ORDER BY table_name, ordinal_position;
+        """)
+        columns = cursor.fetchall()
+
+        # Add tables as nodes
+        tables = {}
+        for table_name, column_name, data_type in columns:
+            # Map data type to user-friendly format
+            friendly_data_type = data_type_mapping.get(data_type, data_type.upper())
+            if table_name not in tables:
+                tables[table_name] = []
+            tables[table_name].append(f"{column_name} ({friendly_data_type})")
+
+        for table_name, columns in tables.items():
+            # Convert table name to uppercase and make it bold
+            dot_lines.append(
+                f'{table_name} [label=<<B>{table_name.upper()}</B><BR ALIGN="LEFT" />' +
+                "<BR ALIGN=\"LEFT\" />".join(columns) +
+                '>, fillcolor=lightyellow];'
+            )
+
+        # Fetch foreign key relationships
+        cursor.execute("""
+            SELECT
+                tc.table_name AS source_table,
+                kcu.column_name AS source_column,
+                ccu.table_name AS target_table,
+                ccu.column_name AS target_column
+            FROM
+                information_schema.table_constraints AS tc
+            JOIN information_schema.key_column_usage AS kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage AS ccu
+                ON ccu.constraint_name = tc.constraint_name
+                AND ccu.table_schema = tc.table_schema
+            WHERE tc.constraint_type = 'FOREIGN KEY';
+        """)
+        relationships = cursor.fetchall()
+
+        # Add relationships as edges
+        for source_table, source_column, target_table, target_column in relationships:
+            dot_lines.append(
+                f'{source_table} -> {target_table} [label="{source_column} -> {target_column}", color=blue];'
+            )
+
+    except Exception as e:
+        return f"Error fetching schema: {e}", 500
+    finally:
+        cursor.close()
+        conn.close()
+
+    dot_lines.append("}")
+    return {"dot": "\n".join(dot_lines)}
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -211,18 +211,3 @@ def visualize_ra_tree(ra_root, format='png', view=False):
         return dot
     except ImportError:
         raise RuntimeError("Please install graphviz: pip install graphviz")
-
-
-# Example usage with a subquery in FROM
-query = """
-SELECT PS.PARTKEY, PS.SUPPLYKEY
-FROM PARTSUPP AS PS
-JOIN SUPPLIER AS S ON PS.SUPPLYKEY = S.SUPPLYKEY
-JOIN LINEITEM AS L ON PS.SUPPLYKEY = L.SUPPLYKEY
-JOIN (SELECT P.NAME, P.BRAND FROM PART P) AS TMP1 ON TMP1.PARTKEY = PS.PARTKEY
-JOIN (SELECT P.NAME, P.BRAND FROM PART P JOIN AMOGH A WHERE P.Q > 100) AS TMP2 ON TMP2.PARTKEY = L.PARTKEY
-WHERE PS.AVAILQTY > 10 AND S.ACCTBAL > 1000
-"""
-ra_tree = build_ra_tree(query)
-visualize_ra_tree(ra_tree).render('ra_tree_part')
-print(ra_tree)
