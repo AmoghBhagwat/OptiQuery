@@ -108,7 +108,8 @@
                         <form method="post" action="/">
                             <div class="mb-3">
                                 <textarea class="form-control" name="sql" rows="6" placeholder="SELECT * FROM table;"
-                                    oninput="resetButtonStates()">{{ sql }}</textarea>
+                                    oninput="resetButtonStates()"
+                                    style="font-family: monospace; font-size: 14px;">{{ sql }}</textarea>
                             </div>
                             <button type="submit"
                                 class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}"
@@ -164,7 +165,25 @@
         </div>
         {% endif %}
         {% if original_cost_svg and optimized_cost_svg %}
-
+        <div class="row mt-4">
+            <div class="col">
+                <div class="alert alert-info text-center">
+                    <h5>Cost Comparison</h5>
+                    <p>
+                        <strong>Original Cumulative Cost:</strong> {{ "{:.2e}".format(original_cumulative_cost) }} <br>
+                        <strong>Optimized Cumulative Cost:</strong> {{ "{:.2e}".format(optimized_cumulative_cost) }}
+                    </p>
+                    {% if original_cumulative_cost > optimized_cumulative_cost %}
+                    <p class="text-success">The optimized tree has a lower cumulative cost!</p>
+                    {% elif original_cumulative_cost < optimized_cumulative_cost %} <p class="text-danger">The optimized
+                        tree
+                        has a higher cumulative cost!</p>
+                        {% else %}
+                        <p class="text-warning">Both trees have the same cumulative cost.</p>
+                        {% endif %}
+                </div>
+            </div>
+        </div>
         <div class="row mt-4">
             <div class="col-md-6">
                 <div class="card">

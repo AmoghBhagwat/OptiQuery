@@ -1,2 +1,4 @@
 flask
 sqlglot
+pysopg2-binary
+graphviz

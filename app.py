@@ -37,6 +37,7 @@ def fetch_table_statistics():
 
     try:
         # Query pg_stats_all_tables for table statistics
+
         cursor.execute("""
             SELECT relname AS table_name, n_live_tup AS row_count
             FROM pg_stat_all_tables
@@ -44,11 +45,34 @@ def fetch_table_statistics():
         """)
         stats = cursor.fetchall()
 
+        cnt = 0
         for stat in stats:
             table_name, row_count = stat
             table_stats[table_name] = row_count
+            cnt += row_count
 
-        print(f"Fetched table statistics: {table_stats}")
+        if(cnt == 0):
+            cursor.execute("""
+                ANALYZE;
+            """)
+            cursor.execute("""
+                SELECT relname AS table_name, n_live_tup AS row_count
+                FROM pg_stat_all_tables
+                WHERE schemaname = 'public';
+            """)
+
+            stats = cursor.fetchall()
+
+            cnt = 0
+            for stat in stats:
+                table_name, row_count = stat
+                table_stats[table_name] = row_count
+                cnt += row_count
+
+        if(cnt == 0):
+            print(f"Error: No tables found in the database.")
+
+        # print(f"Fetched table statistics: {table_stats}")
 
     except Exception as e:
         print(f"Error fetching table statistics: {e}")
@@ -101,38 +125,33 @@ def compute_cost():
     error = None
     original_cost_svg = None
     optimized_cost_svg = None
+    original_cumulative_cost = 0
+    optimized_cumulative_cost = 0
 
     try:
         # Fetch table statistics
-        print("Fetching table statistics...")
-
+        # print("Fetching table statistics...")
         table_stats = fetch_table_statistics()
 
-        # # Build the original RA tree
-        # ra_tree = build_ra_tree(sql)
-
-        # # print(ra_tree)
-        # # Compute costs and annotate the original RA tree
+        # Compute costs for the original RA tree
         global ra_tree
         ra_tree_with_cost = ra_tree
         estimate_cost(ra_tree_with_cost, table_stats)
-        # # print(ra_tree)
-
-        # # Generate the SVG visualization for the original RA tree
         original_cost_svg = visualize_costs(ra_tree_with_cost).source
 
-        # # Optimize the RA tree
-        # optimized_tree = pushdown_selections(ra_tree)
+        # Calculate cumulative cost for the original tree
+        if hasattr(ra_tree_with_cost, 'cumulative_cost'):
+            original_cumulative_cost = ra_tree_with_cost.cumulative_cost
 
-        # Compute costs and annotate the optimized RA tree
+        # Compute costs for the optimized RA tree
         global optimized_tree
         optimized_tree_with_cost = optimized_tree
         estimate_cost(optimized_tree_with_cost, table_stats)
-
-        # Generate the SVG visualization for the optimized RA tree
         optimized_cost_svg = visualize_costs(optimized_tree_with_cost).source
 
-        # optimized_cost_svg = visualize_ra_tree(optimized_tree).pipe(format='svg').decode('utf-8')
+        # Calculate cumulative cost for the optimized tree
+        if hasattr(optimized_tree_with_cost, 'cumulative_cost'):
+            optimized_cumulative_cost = optimized_tree_with_cost.cumulative_cost
 
     except Exception as e:
         error = str(e)
@@ -142,7 +161,9 @@ def compute_cost():
         sql=sql,
         error=error,
         original_cost_svg=original_cost_svg,
-        optimized_cost_svg=optimized_cost_svg
+        optimized_cost_svg=optimized_cost_svg,
+        original_cumulative_cost=original_cumulative_cost,
+        optimized_cumulative_cost=optimized_cumulative_cost
     )
 
 if __name__ == '__main__':
