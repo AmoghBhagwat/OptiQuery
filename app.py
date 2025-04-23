@@ -9,28 +9,19 @@ from cost_estimator import estimate_cost, visualize_costs
 from join_optimization import join_optimize
 import psycopg2
 
-import copy
-import sys
-
 app = Flask(__name__)
 
-#ra_tree = None
-#ra_tree_with_cost = None
-#after_join = None
-#after_join_push = None
-#after_push = None
-#after_push_join = None
-#table_stats = None
+table_stats = None
 current_tree = None
 
 def get_db_connection():
     try:
         conn = psycopg2.connect(
-            dbname="tpch",  # Replace with your database name
-            user="amogh",  # Replace with your username
-            password="my_secure_password",  # Replace with your password
-            host="localhost",  # Replace with your host if not localhost
-            port="5432"  # Replace with your port if not the default
+            dbname="tpch",
+            user="dabba",
+            password="postgres",
+            host="localhost",
+            port="5432"
         )
         return conn
     except Exception as e:
@@ -46,8 +37,6 @@ def fetch_table_statistics():
     table_stats = {}
 
     try:
-        # Query pg_stats_all_tables for table statistics
-
         cursor.execute("""
             SELECT relname AS table_name, n_live_tup AS row_count
             FROM pg_stat_all_tables
@@ -82,8 +71,6 @@ def fetch_table_statistics():
         if(cnt == 0):
             print(f"Error: No tables found in the database.")
 
-        # print(f"Fetched table statistics: {table_stats}")
-
     except Exception as e:
         print(f"Error fetching table statistics: {e}")
         raise
@@ -102,46 +89,24 @@ def index():
     if request.method == 'POST':
         sql = request.form.get('sql', '')
         try:
-            global ra_tree
+            # Parse the SQL query and build the RA tree
+
             global table_stats
-            global after_join
-            global after_join_push
+            global current_tree
 
             table_stats = fetch_table_statistics()
 
-            ra_tree = build_ra_tree(sql)
-            after_join = build_ra_tree(sql)
-            after_join_push = build_ra_tree(sql)
-            after_push = build_ra_tree(sql)
-            after_push_join = build_ra_tree(sql)
+            current_tree = build_ra_tree(sql)
+            estimate_cost(current_tree, table_stats)
 
-            estimate_cost(ra_tree, table_stats)
-
-            estimate_cost(after_join, table_stats)
-            join_optimize(after_join)
-            estimate_cost(after_join, table_stats) 
-            
-            estimate_cost(after_join_push, table_stats)
-            join_optimize(after_join_push)
-            after_join_push = pushdown_selections(after_join_push)
-            estimate_cost(after_join_push, table_stats)
-
-            after_push = pushdown_selections(after_push)
-            estimate_cost(after_push, table_stats)
-            
-            pushdown_selections(after_push_join)
-            after_push_join = join_optimize(after_push_join)
-            estimate_cost(after_push_join, table_stats)
-
-            dot = visualize_ra_tree(ra_tree)
-            dot_src = dot.source
+            dot_src = visualize_ra_tree(current_tree).source
         except Exception as e:
             error = str(e)
 
     return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
 
 @app.route('/joinopt', methods=['POST'])
-def join_optimization():
+def joinopt():
     """
     Optimize the join order in the relational algebra tree.
     """
@@ -152,9 +117,14 @@ def join_optimization():
     try:
         # Perform join optimization on the RA tree
 
-       
-        dot = visualize_ra_tree(after_join)  # Visualize the optimized tree
-        dot_src = dot.source
+        global table_stats
+        global current_tree
+    
+        estimate_cost(current_tree, table_stats)
+        current_tree = join_optimize(current_tree)
+        estimate_cost(current_tree, table_stats)
+
+        dot_src = visualize_ra_tree(current_tree).source
     except Exception as e:
         error = str(e)
 
@@ -168,76 +138,70 @@ def pushdown():
     error = None
 
     try:
-        # ra_tree = build_ra_tree(sql)
-        global after_join_push
+        # push down selections in the RA tree
+        global table_stats
+        global current_tree
 
-        dot = visualize_ra_tree(after_join_push)
-        dot_src = dot.source
+        estimate_cost(current_tree, table_stats)
+        current_tree = pushdown_selections(current_tree)
+        estimate_cost(current_tree, table_stats)
+
+        dot_src = visualize_ra_tree(current_tree).source
     except Exception as e:
         error = str(e)
 
     return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
 
 @app.route('/cost', methods=['POST'])
-def compute_cost():
+def cost():
     sql = request.form.get('sql', '')
     error = None
-    ra_tree_cost_svg = None
-    after_join_cost_svg = None
-    after_join_push_cost_svg = None
+    ra_tree_svg = None
     ra_tree_cost = 0
-    after_join_cost = 0
-    after_join_push_cost = 0
+    current_tree_svg = None
+    current_tree_cost = 0
+    comparison_message = None
+    comparison_class = None
     
     try:
-        ra_tree_cost_svg = visualize_ra_tree(ra_tree).source
-        after_join_cost_svg = visualize_ra_tree(after_join).source
-        after_join_push_cost_svg = visualize_ra_tree(after_join_push).source
+        global table_stats
+        global current_tree
+        
+        ra_tree = build_ra_tree(sql)
 
+        estimate_cost(ra_tree, table_stats)
+        ra_tree_svg = visualize_ra_tree(ra_tree).source
         ra_tree_cost = ra_tree.cumulative_cost
-        after_join_cost = after_join.cumulative_cost
-        after_join_push_cost = after_join_push.cumulative_cost
+
+        estimate_cost(current_tree, table_stats)
+        current_tree_svg = visualize_ra_tree(current_tree).source
+        current_tree_cost = current_tree.cumulative_cost
+
+        if ra_tree_cost > (1.001 * current_tree_cost):
+            comparison_message = "The optimized tree has a lower cumulative cost!"
+            comparison_class = "text-success"
+        elif (ra_tree_cost * 1.001) < current_tree_cost:
+            comparison_message = "The optimized tree has a higher cumulative cost!"
+            comparison_class = "text-danger"
+        else:
+            comparison_message = "Both trees have almost the same cumulative cost."
+            comparison_class = "text-warning"
 
     except Exception as e:
         error = str(e)
-        print(f"Error in cost computation: {e}", file=sys.stderr)
+
 
     return render_template(
         'index.html',
         sql=sql,
         error=error,
-        ra_tree_cost_svg=ra_tree_cost_svg,
-        after_join_cost_svg=after_join_cost_svg,
-        after_join_push_cost_svg=after_join_push_cost_svg,
+        ra_tree_svg=ra_tree_svg,
+        current_tree_svg=current_tree_svg,
         ra_tree_cost=ra_tree_cost,
-        after_join_cost=after_join_cost,
-        after_join_push_cost=after_join_push_cost
+        current_tree_cost=current_tree_cost,
+        comparison_message=comparison_message,
+        comparison_class=comparison_class
     )
-
-@app.route('/push_join', methods=['POST'])
-def push_join():
-    sql = request.form.get('sql', '')
-    dot_src = None
-    error = None
-
-    try:
-        global table_stats
-
-        ra_treei = build_ra_tree(sql)
-        estimate_cost(ra_treei, table_stats)
-        after_pushi = pushdown_selections(ra_treei)
-        estimate_cost(after_pushi, table_stats)
-        after_push_joini = join_optimize(after_pushi)
-        estimate_cost(after_push_joini, table_stats)
-#        global after_push_join
-
-        dot = visualize_ra_tree(after_push_joini)
-        dot_src = dot.source
-    except Exception as e:
-        error = str(e)
-        print(error)
-
-    return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
 
 @app.route('/schema', methods=['GET'])
 def get_schema_graph():
@@ -248,12 +212,11 @@ def get_schema_graph():
     cursor = conn.cursor()
     dot_lines = [
         "digraph Schema {",
-        "rankdir=LR;",  # Left-to-right graph layout
-        "node [shape=box, style=filled, color=lightblue, fontname=Consolas];",  # Default node styling with monospace font
-        "edge [fontname=Consolas, color=gray];"  # Default edge styling with monospace font
+        "rankdir=LR;", 
+        "node [shape=box, style=filled, color=lightblue, fontname=Consolas];",  
+        "edge [fontname=Consolas, color=gray];" 
     ]
 
-    # Mapping PostgreSQL data types to user-friendly formats
     data_type_mapping = {
         "integer": "INT",
         "character varying": "VARCHAR",
@@ -267,8 +230,9 @@ def get_schema_graph():
         "double precision": "DOUBLE"
     }
 
+    dbname = conn.get_dsn_parameters()['dbname']
+    
     try:
-        # Fetch table names and their columns
         cursor.execute("""
             SELECT table_name, column_name, data_type
             FROM information_schema.columns
@@ -277,24 +241,20 @@ def get_schema_graph():
         """)
         columns = cursor.fetchall()
 
-        # Add tables as nodes
         tables = {}
         for table_name, column_name, data_type in columns:
-            # Map data type to user-friendly format
             friendly_data_type = data_type_mapping.get(data_type, data_type.upper())
             if table_name not in tables:
                 tables[table_name] = []
             tables[table_name].append(f"{column_name} ({friendly_data_type})")
 
         for table_name, columns in tables.items():
-            # Convert table name to uppercase and make it bold
             dot_lines.append(
                 f'{table_name} [label=<<B>{table_name.upper()}</B><BR ALIGN="LEFT" />' +
                 "<BR ALIGN=\"LEFT\" />".join(columns) +
                 '>, fillcolor=lightyellow];'
             )
 
-        # Fetch foreign key relationships
         cursor.execute("""
             SELECT
                 tc.table_name AS source_table,
@@ -313,7 +273,6 @@ def get_schema_graph():
         """)
         relationships = cursor.fetchall()
 
-        # Add relationships as edges
         for source_table, source_column, target_table, target_column in relationships:
             dot_lines.append(
                 f'{source_table} -> {target_table} [label="{source_column} -> {target_column}", color=blue];'
@@ -326,7 +285,7 @@ def get_schema_graph():
         conn.close()
 
     dot_lines.append("}")
-    return {"dot": "\n".join(dot_lines)}
+    return {"dot": "\n".join(dot_lines), "dbname": dbname}
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

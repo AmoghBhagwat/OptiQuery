@@ -24,98 +24,54 @@
             height: 100%;
             overflow: auto;
             margin: 0 auto;
-            /* Added for horizontal centering */
         }
 
         #graph svg {
             width: 100%;
             height: 500px;
             display: block;
-            /* Ensures the SVG itself behaves as a block */
         }
 
         #ra-tree-container,
-        #after-join-container,
-        #after-join-push-container {
+        #current-tree-container {
             width: 100%;
             height: 700px;
             overflow: hidden;
             margin: 0 auto;
-            /* Added for horizontal centering */
         }
 
         .btn-active {
-            background-color: #0d6efd !important;
+            background-color: #2861cb !important;
             color: white !important;
         }
 
         .btn-inactive {
-            background-color: #6c757d !important;
+            background-color: #54a7ef !important;
+            color: white !important;
+        }
+
+        .btn-info {
+            background-color: #31b1c5 !important;
             color: white !important;
         }
     </style>
     <script>
-        // Retrieve button states from localStorage
-        let isTreeGenerated = localStorage.getItem('isTreeGenerated') === 'true';
-        let isJoinOptimized = localStorage.getItem('isJoinOptimized') === 'true';
-        let isPushdownApplied = localStorage.getItem('isPushdownApplied') === 'true';
-
-        // Update button states on page load
-        window.onload = function () {
-            if (isTreeGenerated) {
-                document.getElementById('optimize-button').disabled = false;
-            }
-            if (isTreeGenerated && isJoinOptimized) {
-                document.getElementById('pushdown-button').disabled = false;
-            }
-            if (isTreeGenerated && isJoinOptimized && isPushdownApplied) {
-                document.getElementById('cost-button').disabled = false;
-            }
-        };
-
-        function enableJoinOptimizeButton() {
-            isTreeGenerated = true;
-            localStorage.setItem('isTreeGenerated', 'true');
-            document.getElementById('optimize-button').disabled = false;
-        }
-
-        function enablePushdownButton() {
-            isJoinOptimized = true;
-            localStorage.setItem('isJoinOptimized', 'true');
-            document.getElementById('pushdown-button').disabled = false;
-        }
-
-        function enableCostButton() {
-            isPushdownApplied = true;
-            localStorage.setItem('isPushdownApplied', 'true');
-            if (isTreeGenerated && isJoinOptimized) {
-                document.getElementById('cost-button').disabled = false;
-            }
-        }
-
-        function resetButtonStates() {
-            isTreeGenerated = false;
-            isJoinOptimized = false;
-            isPushdownApplied = false;
-            localStorage.setItem('isTreeGenerated', 'false');
-            localStorage.setItem('isJoinOptimized', 'false');
-            localStorage.setItem('isPushdownApplied', 'false');
-            document.getElementById('optimize-button').disabled = true;
-            document.getElementById('pushdown-button').disabled = true;
-            document.getElementById('cost-button').disabled = true;
-        }
-
         function loadSchema() {
-            // Fetch the schema graph in DOT format
             fetch('/schema')
                 .then(response => response.json())
                 .then(data => {
                     const dot = data.dot;
-
-                    // Render the schema graph
                     d3.select("#schema-graph")
                         .graphviz()
                         .renderDot(dot);
+
+                    const dbname = data.dbname;
+                    const modalTitle = document.getElementById("schemaModalLabel");
+                    if (dbname) {
+                        modalTitle.innerHTML = `Database Schema for ${dbname}`;
+                    } else {
+                        modalTitle.innerHTML = "Database Schema";
+                    }
                 })
                 .catch(error => {
                     console.error("Error fetching schema:", error);
@@ -128,64 +84,54 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">OptiQuery</a>
+            <a class="navbar-brand" href="/">OptiQuery</a>
         </div>
     </nav>
     <div class="container">
         <div class="row mb-4">
-            <!-- Left Column: Textarea and Generate Tree Button -->
-            <div class="col-md-8">
+            <div class="col-md-9">
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title">Enter SQL Query</h5>
                         <form method="post" action="/">
                             <div class="mb-3">
-                                <textarea class="form-control" name="sql" rows="6" placeholder="SELECT * FROM table;"
-                                    oninput="resetButtonStates()"
+                                <textarea class="form-control" name="sql" rows="7" placeholder="SELECT * FROM table;"
                                     style="font-family: monospace; font-size: 14px;">{{ sql }}</textarea>
                             </div>
                             <button type="submit"
-                                class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}"
-                                onclick="enableJoinOptimizeButton()">Generate Tree</button>
+                                class="btn {% if request.endpoint == 'index' %}btn-active{% else %}btn-inactive{% endif %}">Generate
+                                Tree</button>
                         </form>
                     </div>
                 </div>
             </div>
 
-            <!-- Right Column: Apply Pushdown and Compute Cost Buttons -->
-            <div class="col-md-4 d-flex flex-column justify-content-start">
+            <div class="col-md-3 d-flex flex-column justify-content-start">
                 <div class="card">
                     <div class="card-body">
-                        <!-- <h5 class="card-title">Operations</h5> -->
-                        <div class="d-flex justify-content-around align-items-center flex-column">
-                            <form method="post" action="/joinopt" class="mb-3">
-                                <input type="hidden" name="sql" value="{{ sql }}">
-                                <button type="submit" id="optimize-button"
-                                    class="btn {% if request.endpoint == 'optimize' %}btn-active{% else %}btn-inactive{% endif %}"
-                                    disabled onclick="enablePushdownButton()">Optimize RA Tree</button>
-                            </form>
-                            
+                        <h5 class="card-title">Operations</h5>
+                        <div class="d-flex justify-content-around align-items-left flex-column">
                             <form method="post" action="/pushdown" class="mb-3">
                                 <input type="hidden" name="sql" value="{{ sql }}">
                                 <button type="submit" id="pushdown-button"
-                                    class="btn {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}"
-                                    disabled onclick="enableCostButton()">Apply Predicate Pushdown</button>
+                                    class="btn w-100 {% if request.endpoint == 'pushdown' %}btn-active{% else %}btn-inactive{% endif %}">Apply
+                                    Predicate Pushdown</button>
                             </form>
-                            <!-- Compute Cost Button -->
+
+                            <form method="post" action="/joinopt" class="mb-3">
+                                <input type="hidden" name="sql" value="{{ sql }}">
+                                <button type="submit" id="joinopt-button"
+                                    class="btn w-100 {% if request.endpoint == 'joinopt' %}btn-active{% else %}btn-inactive{% endif %}">Apply
+                                    Join Optimization</button>
+                            </form>
+
                             <form method="post" action="/cost" class="mb-3">
                                 <input type="hidden" name="sql" value="{{ sql }}">
                                 <button type="submit" id="cost-button"
-                                    class="btn {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}"
-                                    disabled>Compare Costs</button>
-                            </form>
-                            <!-- Pushdown then Join Button -->
-                            <form method="post" action="/push_join" class="mb-3">
-                                    <input type="hidden" name="sql" value="{{ sql }}">
-                                    <button type="submit" id="push_join-button">Pushdown then Join</button>
+                                    class="btn w-100 {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}">Compare
+                                    Costs</button>
                             </form>
 
-
-                            <!-- Show Database Schema Button -->
                             <a href="#" class="btn btn-info mb-3" data-bs-toggle="modal" data-bs-target="#schemaModal"
                                 onclick="loadSchema()">Show Database Schema</a>
                         </div>
@@ -193,6 +139,11 @@
                 </div>
             </div>
         </div>
+        {% if error %}
+        <div class="alert alert-danger" role="alert">
+            {{ error }}
+        </div>
+        {% endif %}
         {% if dot_src %}
         <div class="row">
             <div class="col">
@@ -217,24 +168,17 @@
             </div>
         </div>
         {% endif %}
-        {% if ra_tree_cost_svg and after_join_cost_svg and after_join_push_cost_svg %}
+        {% if ra_tree_svg and current_tree_svg %}
         <div class="row mt-4">
             <div class="col">
                 <div class="alert alert-info text-center">
                     <h5>Cost Comparison</h5>
                     <p>
                         <strong>Original Cumulative Cost:</strong> {{ "{:.2e}".format(ra_tree_cost) }} <br>
-                        <strong>Cost after Join Optimization:</strong> {{ "{:.2e}".format(after_join_cost) }} <br>
-                        <strong>Cost after (JO) and Predicate Pushdown:</strong> {{ "{:.2e}".format(after_join_push_cost) }}
+                        <strong>Current Cost (after any optimizations):</strong> {{ "{:.2e}".format(current_tree_cost)
+                        }} <br>
                     </p>
-                    {% if ra_tree_cost > after_join_push_cost %}
-                    <p class="text-success">The optimized tree has a lower cumulative cost!</p>
-                    {% elif ra_tree_cost < after_join_push_cost %} <p class="text-danger">The optimized
-                        tree
-                        has a higher cumulative cost!</p>
-                        {% else %}
-                        <p class="text-warning">Both trees have the same cumulative cost.</p>
-                        {% endif %}
+                    <p class="{{ comparison_class }}">{{ comparison_message }}</p>
                 </div>
             </div>
         </div>
@@ -248,15 +192,8 @@
             </div>
             <div class="col-md-6">
                 <div class="card">
-                    <div class="card-body" id="after-join-container">
-                        <h5 class="text-center">RA Tree (after Join Optimization) with Costs</h5>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card">
-                    <div class="card-body" id="after-join-push-container">
-                        <h5 class="text-center">Optimized RA Tree after JO and Predicate Pushdown with Costs</h5>
+                    <div class="card-body" id="current-tree-container">
+                        <h5 class="text-center">Current Tree with Costs</h5>
                     </div>
                 </div>
             </div>
@@ -274,46 +211,38 @@
                     .renderDot(dotData)
                     .on('end', function () {
                         const svg = d3.select(`${containerId} svg`);
-                        const g = svg.select('g'); // Select the inner group element
-
-                        // Define the zoom behavior
+                        const g = svg.select('g');
                         const zoom = d3.zoom()
-                            .scaleExtent([0.1, 2]) // Set zoom limits (min: 0.1x, max: 2x)
+                            .scaleExtent([0.1, 2])
                             .on('zoom', function (event) {
-                                g.attr('transform', event.transform); // Apply the zoom transform to the group
+                                g.attr('transform', event.transform);
                             });
 
-                        // Apply the zoom behavior to the SVG
                         svg.call(zoom);
-
-                        // Set the default zoom level
                         const containerWidth = svg.node().getBoundingClientRect().width;
                         const containerHeight = svg.node().getBoundingClientRect().height;
                         const transform = d3.zoomIdentity
-                            .translate(containerWidth * 0, containerHeight / 2.5) // Center the graph
-                            .scale(0.5); // Apply the zoom level
+                            .translate(containerWidth * 0, containerHeight / 2.5)
+                            .scale(0.5);
 
-                        // Apply the default transform
                         svg.call(zoom.transform, transform);
                     });
             }
 
-            // Render the original and optimized graphs
-            const ra_tree_dot = {{ ra_tree_cost_svg | tojson }};
-            const after_join_dot = {{ after_join_cost_svg | tojson }};
-            const after_join_push_dot = {{ after_join_push_cost_svg | tojson }};
-            renderGraph('#ra-tree-container', ra_tree_dot, 0.4); // Default zoom 0.4x
-            renderGraph('#after-join-container', after_join_dot, 0.4); // Default zoom 0.4x
-            renderGraph('#after-join-push-container', after_join_push_dot, 0.4); // Default zoom 0.4x
+            const ra_tree_dot = {{ ra_tree_svg | tojson }};
+            const current_tree_dot = {{ current_tree_svg | tojson }};
+            renderGraph('#ra-tree-container', ra_tree_dot, 0.4);
+            renderGraph('#current-tree-container', current_tree_dot, 0.4); 
         </script>
         {% endif %}
     </div>
-    <!-- Schema Modal -->
+
     <div class="modal fade" id="schemaModal" tabindex="-1" aria-labelledby="schemaModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="schemaModalLabel">Database Schema</h5>
+                    <h5 class="modal-title" id="schemaModalLabel">
+                    </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
