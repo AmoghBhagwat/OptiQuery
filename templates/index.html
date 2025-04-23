@@ -178,6 +178,12 @@
                                     class="btn {% if request.endpoint == 'cost' %}btn-active{% else %}btn-inactive{% endif %}"
                                     disabled>Compare Costs</button>
                             </form>
+                            <!-- Pushdown then Join Button -->
+                            <form method="post" action="/push_join" class="mb-3">
+                                    <input type="hidden" name="sql" value="{{ sql }}">
+                                    <button type="submit" id="push_join-button">Pushdown then Join</button>
+                            </form>
+
 
                             <!-- Show Database Schema Button -->
                             <a href="#" class="btn btn-info mb-3" data-bs-toggle="modal" data-bs-target="#schemaModal"

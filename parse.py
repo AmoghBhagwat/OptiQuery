@@ -45,6 +45,9 @@ class RANode:
 
         return dot
 
+    def get_alias(self):
+        pass
+
     def __repr__(self):
         return self.__str__()
 
@@ -63,6 +66,9 @@ class Relation(RANode):
         if hasattr(self, 'cumulative_cost'):
             label += f"\nCumulative Cost: {self.cumulative_cost:.2e}"
         return label
+
+    def get_alias(self):
+        return self.alias if self.alias else self.table_name
 
     def __str__(self):
         if self.alias:
@@ -84,6 +90,9 @@ class Selection(RANode):
             label += f"\nCumulative Cost: {self.cumulative_cost:.2e}"
         return label
 
+    def get_alias(self):
+        return self.child.get_alias()
+
     def __str__(self):
         return f'Selection("{self.condition}", {self.child})'
 
@@ -103,6 +112,9 @@ class Projection(RANode):
         if hasattr(self, 'cumulative_cost'):
             label += f"\nCumulative Cost: {self.cumulative_cost:.2e}"
         return label
+
+    def get_alias(self):
+        return self.child.get_alias()
 
     def __str__(self):
         return f"Projection({self.columns}, {self.child})"
@@ -139,6 +151,9 @@ class Subquery(RANode):
         if hasattr(self, 'cumulative_cost'):
             label += f"\nCumulative Cost: {self.cumulative_cost:.2e}"
         return label
+
+    def get_alias(self):
+        return self.alias if self.alias else self.child.get_alias()
 
     def __str__(self):
         return f'Subquery("{self.alias}", {self.child})'

@@ -14,18 +14,21 @@ import sys
 
 app = Flask(__name__)
 
-ra_tree = None
-ra_tree_with_cost = None
-after_join = None
-after_join_push = None
-table_stats = None
+#ra_tree = None
+#ra_tree_with_cost = None
+#after_join = None
+#after_join_push = None
+#after_push = None
+#after_push_join = None
+#table_stats = None
+current_tree = None
 
 def get_db_connection():
     try:
         conn = psycopg2.connect(
             dbname="tpch",  # Replace with your database name
-            user="dabba",  # Replace with your username
-            password="postgres",  # Replace with your password
+            user="amogh",  # Replace with your username
+            password="my_secure_password",  # Replace with your password
             host="localhost",  # Replace with your host if not localhost
             port="5432"  # Replace with your port if not the default
         )
@@ -109,6 +112,8 @@ def index():
             ra_tree = build_ra_tree(sql)
             after_join = build_ra_tree(sql)
             after_join_push = build_ra_tree(sql)
+            after_push = build_ra_tree(sql)
+            after_push_join = build_ra_tree(sql)
 
             estimate_cost(ra_tree, table_stats)
 
@@ -120,6 +125,13 @@ def index():
             join_optimize(after_join_push)
             after_join_push = pushdown_selections(after_join_push)
             estimate_cost(after_join_push, table_stats)
+
+            after_push = pushdown_selections(after_push)
+            estimate_cost(after_push, table_stats)
+            
+            pushdown_selections(after_push_join)
+            after_push_join = join_optimize(after_push_join)
+            estimate_cost(after_push_join, table_stats)
 
             dot = visualize_ra_tree(ra_tree)
             dot_src = dot.source
@@ -139,7 +151,7 @@ def join_optimization():
 
     try:
         # Perform join optimization on the RA tree
-        global after_join
+
        
         dot = visualize_ra_tree(after_join)  # Visualize the optimized tree
         dot_src = dot.source
@@ -201,6 +213,31 @@ def compute_cost():
         after_join_cost=after_join_cost,
         after_join_push_cost=after_join_push_cost
     )
+
+@app.route('/push_join', methods=['POST'])
+def push_join():
+    sql = request.form.get('sql', '')
+    dot_src = None
+    error = None
+
+    try:
+        global table_stats
+
+        ra_treei = build_ra_tree(sql)
+        estimate_cost(ra_treei, table_stats)
+        after_pushi = pushdown_selections(ra_treei)
+        estimate_cost(after_pushi, table_stats)
+        after_push_joini = join_optimize(after_pushi)
+        estimate_cost(after_push_joini, table_stats)
+#        global after_push_join
+
+        dot = visualize_ra_tree(after_push_joini)
+        dot_src = dot.source
+    except Exception as e:
+        error = str(e)
+        print(error)
+
+    return render_template('index.html', sql=sql, dot_src=dot_src, error=error)
 
 @app.route('/schema', methods=['GET'])
 def get_schema_graph():

@@ -41,12 +41,12 @@ def _find_joins(node: RANode, edges: list[tuple[str,str,str]], alias_to_RANode: 
         if(isinstance(node.left,Join)):
             _find_joins(node.left, edges, alias_to_RANode, join_obtained, node)
         else:
-            alias_to_RANode[node.left.alias] = node.left
+            alias_to_RANode[node.left.get_alias()] = node.left
             
         if(isinstance(node.right,Join)): 
             _find_joins(node.right, edges, alias_to_RANode, join_obtained, node)
         else:
-            alias_to_RANode[node.right.alias] = node.right
+            alias_to_RANode[node.right.get_alias()] = node.right
 
 def join_optimize(node: RANode) -> RANode:
     # cost should be computed for RANode
