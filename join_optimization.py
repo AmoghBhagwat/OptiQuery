@@ -63,7 +63,7 @@ def join_optimize(node: RANode) -> RANode:
     for perm in permutations(edges):
         valid = True
         visited = set()
-        curr_cost = max(50,alias_to_RANode[perm[0][0]].cost * alias_to_RANode[perm[0][0]].cost* 0.01)
+        curr_cost = max(50,alias_to_RANode[perm[0][0]].cost * alias_to_RANode[perm[0][1]].cost* 0.01)
         cumulative_cost = curr_cost
         visited.add(perm[0][0])
         visited.add(perm[0][1])
